@@ -1,0 +1,19 @@
+{
+  "Saved Media": [
+    {
+      "Date": "2020-02-14 07:34:00 UTC",
+      "Media Type": "VIDEO",
+      "Download Link": "https://sc-bucket.s3.us-east-2.amazonaws.com/dummy-bucket/9aab6cb6-771a-4cb3-9ec9-04b0cd228d7a/1db6784b-8bd1-41cf-9a9a-89d7b4bc3ec7.mp4"
+    },
+    {
+      "Date": "2020-02-14 07:33:41 UTC",
+      "Media Type": "VIDEO",
+      "Download Link": "https://sc-bucket.s3.us-east-2.amazonaws.com/dummy-bucket/05ed3d17-1260-4f99-9376-4e209452c29f/1b8a0428-4f32-47dc-96cc-e02f885ec7fb.mp4"
+    },
+    {
+      "Date": "2020-02-14 07:29:57 UTC",
+      "Media Type": "PHOTO",
+      "Download Link": "https://sc-bucket.s3.us-east-2.amazonaws.com/dummy-bucket/80ffef38-3120-48d9-bba4-c111bd27e5ea/5b7f5476-12d3-4e4b-894c-5f9ccd863733.jpg"
+    }
+  ]
+}
