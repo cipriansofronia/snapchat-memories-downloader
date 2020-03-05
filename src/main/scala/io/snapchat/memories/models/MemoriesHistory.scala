@@ -2,15 +2,12 @@ package io.snapchat.memories
 package models
 
 sealed trait MediaType {
-  val mediaType: String
   val ext: String
 }
-case object Photo extends MediaType {
-  val mediaType: String = "PHOTO"
+case object PHOTO extends MediaType {
   val ext: String = ".jpg"
 }
-case object Video extends MediaType {
-  val mediaType: String = "VIDEO"
+case object VIDEO extends MediaType {
   val ext: String = ".mp4"
 }
 

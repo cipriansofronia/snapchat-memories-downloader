@@ -1,7 +1,6 @@
 package io.snapchat.memories
 package modules
 
-import models.MemoriesHistory
 import os.Path
 import zio._
 
