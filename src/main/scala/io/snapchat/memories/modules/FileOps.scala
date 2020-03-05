@@ -4,17 +4,17 @@ package modules
 import os.Path
 import zio._
 
-object FileReader {
-  type FileReader = Has[Service]
+object FileOps {
+  type FileOps = Has[Service]
 
   trait Service {
     def readFile(filePath: String): Task[String]
   }
 
-  def readFile(filePath: String): RIO[FileReader, String] =
-    ZIO.accessM[FileReader](_.get.readFile(filePath))
+  def readFile(filePath: String): RIO[FileOps, String] =
+    ZIO.accessM[FileOps](_.get.readFile(filePath))
 
-  val live: ZLayer.NoDeps[Nothing, FileReader] = ZLayer.succeed {
+  val live: ZLayer.NoDeps[Nothing, FileOps] = ZLayer.succeed {
     new Service {
       override def readFile(filePath: String): Task[String] =
         ZIO.effect(os.read(Path(filePath)))

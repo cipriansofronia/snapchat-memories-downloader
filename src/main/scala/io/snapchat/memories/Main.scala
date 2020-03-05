@@ -12,15 +12,16 @@ object Main extends App with LoggingSupport {
         case Some(p) => ZIO.succeed(p)
         case None    => ZIO.fail(new Exception("Please provide your snapchat memories json file!"))
       }
-      fileContent <- FileReader.readFile(path)
+      fileContent <- FileOps.readFile(path)
       memories <- JsonParser.parse(fileContent)
-      _ <- ZIO(println("Memories:"))
-      _ <- ZIO(println(memories.toString))
+      _ <- logger.infoIO(s"Got ${memories.`Saved Media`.size} records from json file!")
+      result <- ZIO.foreachPar(memories.`Saved Media`)(Downloader.downloadFile)
+      _ <- logger.infoIO(s"Successfully downloaded ${result.size} media files!")
     } yield 0
 
     program
       .catchAll(e => logger.errorIO("Program error!", e).as(1))
-      .provideLayer(JsonParser.live ++ FileReader.live)
+      .provideLayer(JsonParser.live ++ FileOps.live ++ Downloader.live)
   }
 
 }
