@@ -16,23 +16,22 @@ object Downloader {
   def download(event: String): RIO[Downloader, String] =
     ZIO.accessM[Downloader](_.get.download(event))
 
-  val live: ZLayer.NoDeps[Nothing, Downloader] =
-    ZLayer.succeed {
-      new Downloader.Service with LoggingSupport {
-        implicit private lazy val httpClient = AsyncHttpClientZioBackend()
+  val live: ZLayer.NoDeps[Nothing, Downloader] = ZLayer.succeed {
+    new Downloader.Service with LoggingSupport {
+      implicit private lazy val httpClient = AsyncHttpClientZioBackend()
 
-        override def download(event: String): Task[String] = {
-          val uri = event
-          logger.infoIO(s"Downloading: $uri") *>
-            sttp
-              .get(uri"$uri")
-              .send()
-              .flatMap {
-                case Response(Right(v), StatusCodes.Ok, _, _, _) => ZIO.succeed(v)
-                case r @ Response(_, code, _, _, _) =>
-                  logger.errorIO(r.body.toString) *> ZIO.fail(new Exception(r.body.toString))
-              }
-        }
+      override def download(event: String): Task[String] = {
+        val uri = event
+        logger.infoIO(s"Downloading: $uri") *>
+          sttp
+            .get(uri"$uri")
+            .send()
+            .flatMap {
+              case Response(Right(v), StatusCodes.Ok, _, _, _) => ZIO.succeed(v)
+              case r @ Response(_, code, _, _, _) =>
+                logger.errorIO(r.body.toString) *> ZIO.fail(new Exception(r.body.toString))
+            }
       }
     }
+  }
 }
