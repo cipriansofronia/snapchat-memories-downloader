@@ -2,6 +2,10 @@ package io.snapchat.memories
 package modules
 
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.attribute.FileTime
+import java.text.SimpleDateFormat
+import java.util.TimeZone
 
 import com.github.mlangc.slf4zio.api._
 import models._
@@ -28,12 +32,20 @@ object Downloader {
   private val liveDownloader: ZLayer[Backend, Nothing, Downloader] =
     ZLayer.fromService { implicit backend: SttpBackend[Task, Nothing, WebSocketHandler] =>
       new Service with LoggingSupport {
-        private val mediaFolder = "snapchat-memories"
+        private lazy val mediaFolder = "snapchat-memories"
+        private lazy val dateFormat = {
+          val simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z")
+          simpleDateFormat.setTimeZone(TimeZone.getDefault)
+          simpleDateFormat
+        }
 
-        private def createFile(media: Media) =
+        private def createFile(media: Media): Task[File] =
+          Task(new File(s"$mediaFolder/${media.fileName}.${media.`Media Type`.ext}"))
+
+        private def setFileTime(file: File, media: Media): Task[File] =
           Task {
-            val file = new File(s"$mediaFolder/${media.fileName}.${media.`Media Type`.ext}")
-            //os.write.over(os.pwd / os.RelPath(file.toPath), "bla", createFolders = true, truncate = true)
+            val millis = dateFormat.parse(media.Date).getTime
+            Files.setLastModifiedTime(file.toPath, FileTime.fromMillis(millis))
             file
           }
 
@@ -45,7 +57,8 @@ object Downloader {
                 .response(asFile(newFile))
                 .send()
                 .flatMap {
-                  case Response(Right(v), StatusCode.Ok, _, _, _) => ZIO.succeed(v)
+                  case Response(Right(file), StatusCode.Ok, _, _, _) =>
+                    setFileTime(file, media)
                   case r @ Response(_, code, _, _, _) =>
                     logger.errorIO(r.body.toString) *> ZIO.fail(new Exception(r.body.toString))
                 }

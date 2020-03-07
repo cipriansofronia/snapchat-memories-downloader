@@ -20,7 +20,7 @@ object Main extends App with LoggingSupport {
     } yield 0
 
     program
-      .catchAll(e => logger.errorIO("Program error!", e).as(1))
+      .catchAll(e => logger.errorIO(s"Program error! ${e.getMessage}", e).as(1))
       .provideLayer(JsonParser.liveImpl ++ FileOps.liveImpl ++ Downloader.liveImpl)
   }
 
