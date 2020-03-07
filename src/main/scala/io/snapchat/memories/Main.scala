@@ -8,7 +8,7 @@ object Main extends App with LoggingSupport {
 
   def run(args: List[String]): URIO[ZEnv, Int] = {
     val program = for {
-      path <- ZIO.effectTotal(args.headOption) >>= {
+      path <- args.headOption match {
         case Some(p) => ZIO.succeed(p)
         case None    => ZIO.fail(new Exception("Please provide your snapchat memories json file!"))
       }
@@ -21,7 +21,7 @@ object Main extends App with LoggingSupport {
 
     program
       .catchAll(e => logger.errorIO("Program error!", e).as(1))
-      .provideLayer(JsonParser.live ++ FileOps.live ++ Downloader.live)
+      .provideLayer(JsonParser.liveImpl ++ FileOps.liveImpl ++ Downloader.liveImpl)
   }
 
 }

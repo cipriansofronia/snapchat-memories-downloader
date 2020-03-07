@@ -3,13 +3,16 @@ package modules
 
 import java.io.File
 
-import com.softwaremill.sttp._
-import com.softwaremill.sttp.asynchttpclient.zio.AsyncHttpClientZioBackend
 import com.github.mlangc.slf4zio.api._
 import models._
+import sttp.client._
+import sttp.client.asynchttpclient.WebSocketHandler
+import sttp.client.asynchttpclient.zio.AsyncHttpClientZioBackend
+import sttp.model.StatusCode
 import zio._
 
 object Downloader {
+  private type Backend = Has[SttpBackend[Task, Nothing, WebSocketHandler]]
   type Downloader = Has[Service]
 
   trait Service {
@@ -19,25 +22,38 @@ object Downloader {
   def downloadFile(media: Media): RIO[Downloader, File] =
     ZIO.accessM[Downloader](_.get.downloadFile(media))
 
-  val live: ZLayer.NoDeps[Nothing, Downloader] = ZLayer.succeed {
-    new Service with LoggingSupport {
-      implicit private lazy val httpClient = AsyncHttpClientZioBackend()
-      private val mediaFolder = "snapchat-memories"
+  private val liveBackend: ZLayer.NoDeps[Nothing, Backend] =
+    ZLayer.fromManaged(AsyncHttpClientZioBackend.managed().orDie)
 
-      override def downloadFile(media: Media): Task[File] = {
-        logger.infoIO(s"Downloading: ${media.`Download Link`}") *>
-          Task(new File(s"$mediaFolder/${media.fileName}.${media.`Media Type`.ext}")) /*>>= { newFile =>
-            sttp
-              .get(uri"${media.`Download Link`}")
-              .response(asFile(newFile, overwrite = true))
-              .send()
-              .flatMap {
-                case Response(Right(v), StatusCodes.Ok, _, _, _) => ZIO.succeed(v)
-                case r @ Response(_, code, _, _, _) =>
-                  logger.errorIO(r.body.toString) *> ZIO.fail(new Exception(r.body.toString))
-              }
-          }*/
+  private val liveDownloader: ZLayer[Backend, Nothing, Downloader] =
+    ZLayer.fromService { implicit backend: SttpBackend[Task, Nothing, WebSocketHandler] =>
+      new Service with LoggingSupport {
+        private val mediaFolder = "snapchat-memories"
+
+        private def createFile(media: Media) =
+          Task {
+            val file = new File(s"$mediaFolder/${media.fileName}.${media.`Media Type`.ext}")
+            //os.write.over(os.pwd / os.RelPath(file.toPath), "bla", createFolders = true, truncate = true)
+            file
+          }
+
+        override def downloadFile(media: Media): Task[File] = {
+          logger.infoIO(s"Downloading: ${media.`Download Link`}") *>
+            createFile(media) >>= { newFile =>
+              basicRequest
+                .get(uri"${media.`Download Link`}")
+                .response(asFile(newFile))
+                .send()
+                .flatMap {
+                  case Response(Right(v), StatusCode.Ok, _, _, _) => ZIO.succeed(v)
+                  case r @ Response(_, code, _, _, _) =>
+                    logger.errorIO(r.body.toString) *> ZIO.fail(new Exception(r.body.toString))
+                }
+            }
+        }
       }
     }
-  }
+
+  val liveImpl: ZLayer.NoDeps[Nothing, Downloader] = liveBackend >>> liveDownloader
+
 }

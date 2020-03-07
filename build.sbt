@@ -2,12 +2,16 @@ name := "snapchat-memories-downloader"
 
 version := "0.1.1"
 
+scalaVersion := "2.12.10"
+
+resolvers += Resolver.sonatypeRepo("public")
+
 lazy val ZIOVersion = "1.0.0-RC18-1"
 
 libraryDependencies ++= Seq(
   "dev.zio"                         %% "zio"                                % ZIOVersion,
-  "com.softwaremill.sttp"           %% "core"                               % "1.7.2",
-  "com.softwaremill.sttp"           %% "async-http-client-backend-zio"      % "1.7.2",
+  "com.softwaremill.sttp.client"    %% "core"                               % "2.0.3",
+  "com.softwaremill.sttp.client"    %% "async-http-client-backend-zio"      % "2.0.3",
   "com.softwaremill.quicklens"      %% "quicklens"                          % "1.4.12",
   "io.circe"                        %% "circe-generic"                      % "0.13.0",
   "io.circe"                        %% "circe-generic-extras"               % "0.13.0",
@@ -22,5 +26,3 @@ libraryDependencies ++= Seq(
   "dev.zio"                         %% "zio-test-sbt"                       % ZIOVersion % Test,
   compilerPlugin("org.typelevel" % "kind-projector" % "0.11.0" cross CrossVersion.full)
 )
-
-scalaVersion := "2.13.1"

@@ -19,7 +19,7 @@ object JsonParser {
   def parse(json: String): RIO[JsonParser, SnapchatMemories] =
     ZIO.accessM[JsonParser](_.get.parse(json))
 
-  val live: ZLayer.NoDeps[Nothing, JsonParser] = ZLayer.succeed {
+  val liveImpl: ZLayer.NoDeps[Nothing, JsonParser] = ZLayer.succeed {
     new Service {
       implicit private val MediaTypeDecoder: Decoder[MediaType] = deriveEnumerationDecoder[MediaType]
 
