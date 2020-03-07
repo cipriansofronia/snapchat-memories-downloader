@@ -60,7 +60,8 @@ object Downloader {
                   case Response(Right(file), StatusCode.Ok, _, _, _) =>
                     setFileTime(file, media)
                   case r @ Response(_, code, _, _, _) =>
-                    logger.errorIO(r.body.toString) *> ZIO.fail(new Exception(r.body.toString))
+                    val message = s"Error code $code, message: ${r.body.toString}"
+                    logger.errorIO(message) *> ZIO.fail(new Exception(message))
                 }
             }
         }

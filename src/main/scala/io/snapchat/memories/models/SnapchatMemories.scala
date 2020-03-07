@@ -17,7 +17,6 @@ case class Media(Date: String, `Media Type`: MediaType, `Download Link`: String)
       .replaceAll(" ", "")
       .replaceAll("-", "")
       .replaceAll(":", "")
-      //.replaceAll("UTC", "")
 }
 
 case class SnapchatMemories(`Saved Media`: List[Media])
