@@ -26,3 +26,5 @@ libraryDependencies ++= Seq(
   "dev.zio"                         %% "zio-test-sbt"                       % ZIOVersion % Test,
   compilerPlugin("org.typelevel" % "kind-projector" % "0.11.0" cross CrossVersion.full)
 )
+
+testFrameworks ++= Seq(new TestFramework("zio.test.sbt.ZTestFramework"))

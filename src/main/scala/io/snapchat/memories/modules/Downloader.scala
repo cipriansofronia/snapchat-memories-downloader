@@ -10,14 +10,15 @@ import java.util.TimeZone
 import com.github.mlangc.slf4zio.api._
 import models._
 import sttp.client._
-import sttp.client.asynchttpclient.WebSocketHandler
 import sttp.client.asynchttpclient.zio.AsyncHttpClientZioBackend
 import sttp.model.StatusCode
 import zio._
 
 object Downloader {
-  private type Backend = Has[SttpBackend[Task, Nothing, WebSocketHandler]]
+  type Backend = Has[SttpBackend[Task, Nothing, Nothing]]
   type Downloader = Has[Service]
+
+  lazy val mediaFolder = "snapchat-memories"
 
   trait Service {
     def downloadFile(media: Media): Task[File]
@@ -29,10 +30,9 @@ object Downloader {
   private val liveBackend: ZLayer.NoDeps[Nothing, Backend] =
     ZLayer.fromManaged(AsyncHttpClientZioBackend.managed().orDie)
 
-  private val liveDownloader: ZLayer[Backend, Nothing, Downloader] =
-    ZLayer.fromService { implicit backend: SttpBackend[Task, Nothing, WebSocketHandler] =>
+  private[modules] val liveDownloader: ZLayer[Backend, Nothing, Downloader] =
+    ZLayer.fromService { implicit backend =>
       new Service with LoggingSupport {
-        private lazy val mediaFolder = "snapchat-memories"
         private lazy val dateFormat = {
           val simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z")
           simpleDateFormat.setTimeZone(TimeZone.getDefault)
