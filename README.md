@@ -16,3 +16,9 @@ In order to run it, you'll need java installed on your machine!
 ```bash
 java -jar snapchat-memories-downloader.jar /absolute/path/to/your/memories_history.json
 ```
+
+#### How to build it:
+You can always build the artifact yourself using this command: 
+```bash
+sbt assembly
+```
