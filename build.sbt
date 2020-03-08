@@ -1,8 +1,27 @@
-name := "snapchat-memories-downloader"
+import sbt.Artifact
+
+val projectName = "snapchat-memories-downloader"
+name := projectName
 
 version := "0.1.1"
 
 scalaVersion := "2.12.10"
+
+scalacOptions := Seq(
+  "-unchecked",
+  "-deprecation",
+  "-encoding", "utf8",
+  "-target:jvm-1.8",
+  "-feature",
+  "-language:_",
+  "-Xlint",
+  "-Ywarn-dead-code",
+  "-Yno-adapted-args",
+  "-Ywarn-numeric-widen",
+  "-Ywarn-value-discard",
+  "-Xlog-reflective-calls",
+  "-Xfuture"
+)
 
 resolvers += Resolver.sonatypeRepo("public")
 
@@ -28,3 +47,14 @@ libraryDependencies ++= Seq(
 )
 
 testFrameworks ++= Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
+
+version in assembly := "dirty"
+
+mainClass in assembly := Some("io.snapchat.memories.Main")
+
+addArtifact(Artifact(projectName, "assembly"), sbtassembly.AssemblyKeys.assembly)
+
+assemblyMergeStrategy in assembly := {
+  case PathList("META-INF", xs@_*) => MergeStrategy.discard
+  case _ => MergeStrategy.last
+}
