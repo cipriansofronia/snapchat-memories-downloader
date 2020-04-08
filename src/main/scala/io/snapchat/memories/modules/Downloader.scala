@@ -2,72 +2,105 @@ package io.snapchat.memories
 package modules
 
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.attribute.FileTime
 import java.text.SimpleDateFormat
 import java.util.TimeZone
 
 import com.github.mlangc.slf4zio.api._
-import models._
 import sttp.client._
-import sttp.client.asynchttpclient.zio.AsyncHttpClientZioBackend
+import sttp.client.asynchttpclient.WebSocketHandler
+import sttp.client.asynchttpclient.zio.{AsyncHttpClientZioBackend, SttpClient}
 import sttp.model.StatusCode
+import models._
+import models.Errors.{SetMediaTimeError, HttpError}
 import zio._
+import zio.clock.Clock
+import zio.duration._
 
 object Downloader {
-  type Backend = Has[SttpBackend[Task, Nothing, Nothing]]
   type Downloader = Has[Service]
 
-  lazy val mediaFolder = "snapchat-memories"
-
-  trait Service {
-    def downloadFile(media: Media): Task[File]
+  private lazy val mediaFolder = "snapchat-memories"
+  private lazy val dateFormat: SimpleDateFormat = {
+    val simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z")
+    simpleDateFormat.setTimeZone(TimeZone.getDefault)
+    simpleDateFormat
   }
 
-  def downloadFile(media: Media): RIO[Downloader, File] =
-    ZIO.accessM[Downloader](_.get.downloadFile(media))
+  trait Service {
+    def downloadMedia(media: Media): Task[Boolean]
+  }
 
-  private val liveBackend: ZLayer.NoDeps[Nothing, Backend] =
-    ZLayer.fromManaged(AsyncHttpClientZioBackend.managed().orDie)
+  def downloadMedia(media: Media): RIO[Downloader, Boolean] =
+    ZIO.accessM[Downloader](_.get.downloadMedia(media))
 
-  private[modules] val liveDownloader: ZLayer[Backend, Nothing, Downloader] =
-    ZLayer.fromService { implicit backend =>
+  private [modules] val downloaderLayer: ZLayer[SttpClient with Clock, Nothing, Downloader] =
+    ZLayer.fromServices[SttpBackend[Task, Nothing, WebSocketHandler], Clock.Service, Downloader.Service] { (backend, clock) =>
       new Service with LoggingSupport {
-        private lazy val dateFormat = {
-          val simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z")
-          simpleDateFormat.setTimeZone(TimeZone.getDefault)
-          simpleDateFormat
-        }
+        private implicit val sttpBackend = backend
+        private val clockLayer: ULayer[Clock] = ZLayer.succeed(clock)
 
         private def createFile(media: Media): Task[File] =
           Task(new File(s"$mediaFolder/${media.fileName}.${media.`Media Type`.ext}"))
 
-        private def setFileTime(file: File, media: Media): Task[File] =
-          Task {
-            val millis = dateFormat.parse(media.Date).getTime
-            Files.setLastModifiedTime(file.toPath, FileTime.fromMillis(millis))
-            file
+        private def setFileTime(file: File, media: Media): Task[Boolean] =
+          Task
+            .effect {
+              val millis = dateFormat.parse(media.Date).getTime
+              file.setLastModified(millis)
+            }
+            .mapError(e => SetMediaTimeError(s"Failed setting time for $media", e))
+
+        private val retryDownloadSchedule =
+          Schedule.exponential(1.second) && Schedule.recurs(10)
+
+        private def getMediaUrl(media: Media): Task[String] =
+          Task(uri"${media.`Download Link`}") >>= { downloadUri =>
+            basicRequest
+              .post(downloadUri)
+              .header("Content-Type", "application/x-www-form-urlencoded")
+              .send()
+              .flatMap {
+                case Response(Right(url), StatusCode.Ok, _, _, _) =>
+                  Task.succeed(url)
+                case r@Response(_, code, _, _, _) =>
+                  val message = s"Error getting media ${media.fileName}, code $code, message: ${r.body.toString}"
+                  logger.errorIO(message) *> ZIO.fail(HttpError(message))
+              }
+              .retry(retryDownloadSchedule)
+              .provideLayer(clockLayer)
           }
 
-        override def downloadFile(media: Media): Task[File] = {
-          logger.infoIO(s"Downloading: ${media.`Download Link`}") *>
-            createFile(media) >>= { newFile =>
-              basicRequest
-                .get(uri"${media.`Download Link`}")
-                .response(asFile(newFile))
-                .send()
-                .flatMap {
-                  case Response(Right(file), StatusCode.Ok, _, _, _) =>
-                    setFileTime(file, media)
-                  case r @ Response(_, code, _, _, _) =>
-                    val message = s"Error code $code, message: ${r.body.toString}"
-                    logger.errorIO(message) *> ZIO.fail(new Exception(message))
-                }
-            }
-        }
+        private def downloadFile(newFile: File, media: Media, mediaUrl: String): Task[Boolean] =
+          Task(uri"$mediaUrl") >>= { mediaUri =>
+            basicRequest
+              .get(mediaUri)
+              .response(asFile(newFile))
+              .send()
+              .flatMap {
+                case Response(Right(file), StatusCode.Ok, _, _, _) =>
+                  setFileTime(file, media)
+                case r @ Response(_, code, _, _, _) =>
+                  val message = s"Error downloading file ${media.fileName}, code $code, message: ${r.body.toString}"
+                  logger.errorIO(message) *> ZIO.fail(HttpError(message))
+              }
+              .retry(retryDownloadSchedule)
+              .provideLayer(clockLayer)
+          }
+
+        //todo diff output with input
+        //todo skip if it cant download file after retry
+        override def downloadMedia(media: Media): Task[Boolean] =
+          for {
+            _    <- logger.infoIO(s"Downloading: $media")
+            url  <- getMediaUrl(media)
+            file <- createFile(media)
+            r    <- downloadFile(file, media, url)
+            _    <- clock.sleep(1.second)
+          } yield r
       }
+
     }
 
-  val liveImpl: ZLayer.NoDeps[Nothing, Downloader] = liveBackend >>> liveDownloader
+  val liveLayer: ULayer[Downloader] = AsyncHttpClientZioBackend.layer().orDie ++ Clock.live >>> downloaderLayer
 
 }

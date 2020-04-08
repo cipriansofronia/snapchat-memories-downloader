@@ -15,13 +15,13 @@ object Main extends App with LoggingSupport {
       fileContent <- FileOps.readFile(path)
       memories <- JsonParser.parse(fileContent)
       _ <- logger.infoIO(s"Got ${memories.`Saved Media`.size} records from json file!")
-      result <- ZIO.foreachPar(memories.`Saved Media`)(Downloader.downloadFile)
-      _ <- logger.infoIO(s"Successfully downloaded ${result.size} media files!")
+      result <- ZIO.foreachParN(5)(memories.`Saved Media`)(Downloader.downloadMedia)
+      _ <- logger.infoIO(s"Successfully downloaded ${result.size} media files out of ${memories.`Saved Media`.size}!")
     } yield 0
 
     program
-      .catchAll(e => logger.errorIO(s"Program error! ${e.getMessage}", e).as(1))
-      .provideLayer(JsonParser.liveImpl ++ FileOps.liveImpl ++ Downloader.liveImpl)
+      .catchAll(e => logger.errorIO(s"Program error! Message: ${e.getMessage}", e).as(1))
+      .provideLayer(JsonParser.liveLayer ++ FileOps.liveLayer ++ Downloader.liveLayer)
   }
 
 }

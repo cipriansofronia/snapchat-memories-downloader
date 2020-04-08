@@ -3,7 +3,6 @@ package modules
 
 import io.circe._
 import io.circe.parser._
-import io.circe.refined._
 import io.circe.generic.auto._
 import io.circe.generic.extras.semiauto._
 import models._
@@ -19,9 +18,9 @@ object JsonParser {
   def parse(json: String): RIO[JsonParser, SnapchatMemories] =
     ZIO.accessM[JsonParser](_.get.parse(json))
 
-  val liveImpl: ZLayer.NoDeps[Nothing, JsonParser] = ZLayer.succeed {
+  val liveLayer: ULayer[JsonParser] = ZLayer.succeed {
     new Service {
-      implicit private val MediaTypeDecoder: Decoder[MediaType] = deriveEnumerationDecoder[MediaType]
+      implicit private val mediaTypeDecoder: Decoder[MediaType] = deriveEnumerationDecoder[MediaType]
 
       override def parse(json: String): Task[SnapchatMemories] =
         ZIO.effect(decode[SnapchatMemories](json)) >>= {

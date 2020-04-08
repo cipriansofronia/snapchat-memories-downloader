@@ -12,11 +12,7 @@ case object VIDEO extends MediaType {
 }
 
 case class Media(Date: String, `Media Type`: MediaType, `Download Link`: String) {
-  val fileName: String =
-    Date
-      .replaceAll(" ", "")
-      .replaceAll("-", "")
-      .replaceAll(":", "")
+  val fileName: String = Date.replaceAll(" ", "-")
 }
 
 case class SnapchatMemories(`Saved Media`: List[Media])
