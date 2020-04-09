@@ -6,7 +6,7 @@ import zio.test.Assertion._
 import zio.test.environment._
 import zio.test.{DefaultRunnableSpec, _}
 
-object JsonParserSpec extends DefaultRunnableSpec {
+object JsonOpsSpec extends DefaultRunnableSpec {
 
   val testString: String =
     """
@@ -35,8 +35,8 @@ object JsonParserSpec extends DefaultRunnableSpec {
     suite("Json parser Spec")(
       testM("test parsing json") {
         for {
-          v <- JsonParser.parse(testString)
+          v <- JsonOps.parse(testString)
         } yield assert(v)(equalTo(testData))
       }
-    ).provideLayerShared(JsonParser.liveLayer)
+    ).provideLayerShared(JsonOps.liveLayer)
 }

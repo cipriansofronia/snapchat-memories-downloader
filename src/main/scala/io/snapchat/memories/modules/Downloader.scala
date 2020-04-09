@@ -7,11 +7,9 @@ import java.util.TimeZone
 
 import com.github.mlangc.slf4zio.api._
 import sttp.client._
-import sttp.client.asynchttpclient.WebSocketHandler
 import sttp.client.asynchttpclient.zio.{AsyncHttpClientZioBackend, SttpClient}
 import sttp.model.StatusCode
 import models._
-import models.Errors.{SetMediaTimeError, HttpError}
 import zio._
 import zio.clock.Clock
 import zio.duration._
@@ -27,33 +25,33 @@ object Downloader {
   }
 
   trait Service {
-    def downloadMedia(media: Media): Task[Boolean]
+    def downloadMedia(media: Media): RIO[Clock, ResultMediaFile]
   }
 
-  def downloadMedia(media: Media): RIO[Downloader, Boolean] =
-    ZIO.accessM[Downloader](_.get.downloadMedia(media))
+  def downloadMedia(media: Media): RIO[Downloader with Clock, ResultMediaFile] =
+    ZIO.accessM[Downloader with Clock](_.get.downloadMedia(media))
 
-  private [modules] val downloaderLayer: ZLayer[SttpClient with Clock, Nothing, Downloader] =
-    ZLayer.fromServices[SttpBackend[Task, Nothing, WebSocketHandler], Clock.Service, Downloader.Service] { (backend, clock) =>
+  private [modules] val downloaderLayer: ZLayer[SttpClient, Nothing, Downloader] =
+    ZLayer.fromService { implicit backend =>
       new Service with LoggingSupport {
-        private implicit val sttpBackend = backend
-        private val clockLayer: ULayer[Clock] = ZLayer.succeed(clock)
+        private val noOfRetries = 7
 
-        private def createFile(media: Media): Task[File] =
+        private def createEmptyFile(media: Media): Task[File] =
           Task(new File(s"$mediaFolder/${media.fileName}.${media.`Media Type`.ext}"))
 
-        private def setFileTime(file: File, media: Media): Task[Boolean] =
+        private def setFileTime(file: File, media: Media): RIO[Clock, Boolean] =
           Task
             .effect {
               val millis = dateFormat.parse(media.Date).getTime
               file.setLastModified(millis)
             }
-            .mapError(e => SetMediaTimeError(s"Failed setting time for $media", e))
+            .mapError(e => SetMediaTimeError(s"Failed setting time for '${media.Date}'", e))
+            .retry(Schedule.fibonacci(2.seconds) && Schedule.recurs(3))
 
         private val retryDownloadSchedule =
-          Schedule.exponential(1.second) && Schedule.recurs(10)
+          Schedule.fibonacci(2.seconds) && Schedule.recurs(noOfRetries)
 
-        private def getMediaUrl(media: Media): Task[String] =
+        private def getMediaUrl(media: Media): RIO[Clock, String] =
           Task(uri"${media.`Download Link`}") >>= { downloadUri =>
             basicRequest
               .post(downloadUri)
@@ -62,45 +60,51 @@ object Downloader {
               .flatMap {
                 case Response(Right(url), StatusCode.Ok, _, _, _) =>
                   Task.succeed(url)
-                case r@Response(_, code, _, _, _) =>
-                  val message = s"Error getting media ${media.fileName}, code $code, message: ${r.body.toString}"
-                  logger.errorIO(message) *> ZIO.fail(HttpError(message))
+                case r @ Response(_, code, _, _, _) =>
+                  val message = s"Error getting media '${media.Date}', code $code, message: ${r.body.toString}"
+                  logger.errorIO(message) *> ZIO.fail(DownloadError(message))
               }
               .retry(retryDownloadSchedule)
-              .provideLayer(clockLayer)
           }
 
-        private def downloadFile(newFile: File, media: Media, mediaUrl: String): Task[Boolean] =
+        private def downloadMediaToFile(newFile: File, media: Media, mediaUrl: String): RIO[Clock, File] =
           Task(uri"$mediaUrl") >>= { mediaUri =>
             basicRequest
               .get(mediaUri)
               .response(asFile(newFile))
               .send()
               .flatMap {
-                case Response(Right(file), StatusCode.Ok, _, _, _) =>
-                  setFileTime(file, media)
+                case Response(Right(outputFile), StatusCode.Ok, _, _, _) =>
+                  Task.succeed(outputFile)
                 case r @ Response(_, code, _, _, _) =>
-                  val message = s"Error downloading file ${media.fileName}, code $code, message: ${r.body.toString}"
-                  logger.errorIO(message) *> ZIO.fail(HttpError(message))
+                  val message = s"Error downloading file '${media.Date}', code $code, message: ${r.body.toString}"
+                  logger.errorIO(message) *> ZIO.fail(DownloadError(message))
               }
               .retry(retryDownloadSchedule)
-              .provideLayer(clockLayer)
           }
 
         //todo diff output with input
-        //todo skip if it cant download file after retry
-        override def downloadMedia(media: Media): Task[Boolean] =
-          for {
-            _    <- logger.infoIO(s"Downloading: $media")
-            url  <- getMediaUrl(media)
-            file <- createFile(media)
-            r    <- downloadFile(file, media, url)
-            _    <- clock.sleep(1.second)
-          } yield r
+        override def downloadMedia(media: Media): URIO[Clock, ResultMediaFile] =
+          (
+            for {
+              _         <- logger.infoIO(s"Downloading: $media")
+              url       <- getMediaUrl(media)
+              emptyFile <- createEmptyFile(media)
+              mediaFile <- downloadMediaToFile(emptyFile, media, url)
+              _         <- setFileTime(mediaFile, media)
+              _         <- clock.sleep(500.milliseconds)
+            } yield ResultMediaFileSaved
+          )
+          .catchAll(t =>
+            logger
+              .errorIO(s"Failed downloading media file '${media.Date}', retried $noOfRetries times, will skip...", t)
+              .as(ResultMediaFileFailed(media))
+          )
+
       }
 
     }
 
-  val liveLayer: ULayer[Downloader] = AsyncHttpClientZioBackend.layer().orDie ++ Clock.live >>> downloaderLayer
+  val liveLayer: ULayer[Downloader] = AsyncHttpClientZioBackend.layer().orDie >>> downloaderLayer
 
 }
