@@ -30,7 +30,11 @@ object Helper extends LoggingSupport {
                                 notSavedMedias: List[ResultMediaFileFailed],
                                 fileName: String): RIO[JsonOps with FileOps, Unit] =
     if (noOfSavedMedias == inputMemoriesCount)
-      logger.infoIO(s"Successfully downloaded $noOfSavedMedias media files!")
+      logger.infoIO {
+        s"""|************** Download finished! **************
+            |Successfully downloaded $noOfSavedMedias media files!
+            |************************************************""".stripMargin
+      }
     else
       saveFailedResult(notSavedMedias, fileName) *>
         logger.infoIO {
@@ -51,8 +55,8 @@ object Helper extends LoggingSupport {
 
   private def saveFailedResult(results: List[ResultMediaFileFailed], fileName: String): RIO[JsonOps with FileOps, Unit] =
     for {
-      data <- toJson(SnapchatMemories(results.map(_.media)))
-      _    <- writeFile(fileName, data)
+      json <- toJson(SnapchatMemories(results.map(_.media)))
+      _    <- writeFile(fileName, json)
     } yield ()
 
 
