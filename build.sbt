@@ -14,19 +14,20 @@ scalacOptions := Seq(
   "-target:jvm-1.8",
   "-feature",
   "-language:_",
-  "-Xlint",
   "-Yno-adapted-args",
   "-Ywarn-dead-code",
   "-Ywarn-macros:after",
   "-Ywarn-numeric-widen",
   "-Ywarn-value-discard",
+  "-Xlint",
+  "-Xfatal-warnings",
   "-Xlog-reflective-calls",
   "-Xfuture"
 )
 
 resolvers += Resolver.sonatypeRepo("public")
 
-lazy val ZIOVersion   = "1.0.0-RC18-2"
+lazy val ZIOVersion   = "1.0.0-RC18-2+161-a06ef501-SNAPSHOT"
 lazy val SttpVersion  = "2.0.6"
 lazy val CirceVersion = "0.13.0"
 
@@ -55,6 +56,6 @@ mainClass in assembly := Some("io.snapchat.memories.Main")
 addArtifact(Artifact(projectName, "assembly"), sbtassembly.AssemblyKeys.assembly)
 
 assemblyMergeStrategy in assembly := {
-  case PathList("META-INF", xs@_*) => MergeStrategy.discard
+  case PathList("META-INF", _ @ _*) => MergeStrategy.discard
   case _ => MergeStrategy.last
 }

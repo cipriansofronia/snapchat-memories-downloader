@@ -4,7 +4,7 @@ package models {
 
   case class NoMemoriesFileError(message: String) extends Exception(message)
 
-  case class SetMediaTimeError(message: String, t: Throwable) extends Exception(message, t)
+  case class SetMediaDateError(message: String, t: Throwable) extends Exception(message, t)
 
   case class DownloadError(message: String) extends Exception(message)
 

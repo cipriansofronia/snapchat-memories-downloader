@@ -1,5 +1,7 @@
 package io.snapchat.memories
 
+import java.lang.{Runtime => JRuntime}
+
 import com.github.mlangc.slf4zio.api._
 import modules._
 import zio._
@@ -14,7 +16,8 @@ object Main extends App with LoggingSupport {
       memories     <- JsonOps.parse(fileContent)
       noOfMemories =  memories.`Saved Media`.size
       _            <- logger.infoIO(s"Got $noOfMemories records from json file!")
-      results      <- ZIO.foreachParN(6)(memories.`Saved Media`)(Downloader.downloadMedia)
+      coresNumber  <- ZIO.effectTotal(JRuntime.getRuntime.availableProcessors())
+      results      <- ZIO.foreachParN(coresNumber)(memories.`Saved Media`)(Downloader.downloadMedia)
       _            <- Helper.interpretResults(noOfMemories, results)
     } yield 0
 

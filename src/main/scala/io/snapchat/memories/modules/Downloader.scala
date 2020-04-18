@@ -28,40 +28,43 @@ object Downloader {
   }
 
   trait Service {
-    def downloadMedia(media: Media): RIO[Clock, ResultMediaFile]
+    def downloadMedia(media: Media): RIO[Clock, MediaResult]
   }
 
-  def downloadMedia(media: Media): RIO[Downloader with Clock, ResultMediaFile] =
+  def downloadMedia(media: Media): RIO[Downloader with Clock, MediaResult] =
     ZIO.accessM[Downloader with Clock](_.get.downloadMedia(media))
 
   private [modules] val downloaderLayer: ZLayer[SttpClient with FileOps, Nothing, Downloader] =
     ZLayer.fromServices[SttpBackend[Task, Nothing, WebSocketHandler], FileOps.Service, Downloader.Service] { (backend, fileOps) =>
       new Service with LoggingSupport {
         private implicit val sttpBacked: SttpBackend[Task, Nothing, WebSocketHandler] = backend
-        private val noOfRetries = 7
+        private val noOfDownloadRetries = 7
+        private val noOfModifyDateRetries = 4
 
         private def createEmptyFile(media: Media): RIO[Clock, File] =
           for {
-            path <- Task.effectTotal(s"$mediaFolder/${media.fileName}.${media.`Media Type`.ext}")
+            path   <- Task.effectTotal(s"$mediaFolder/${media.fileName}.${media.`Media Type`.ext}")
             exists <- fileOps.doesFilePathExist(path)
-            r <- if (!exists) Task(new File(path))
-              else clock.currentTime(TimeUnit.MILLISECONDS) >>= { ms =>
-                Task(new File(path.replace(s".${media.`Media Type`.ext}", s"-$ms.${media.`Media Type`.ext}")))
-              }
+            r      <- if (!exists) Task(new File(path))
+                      else clock.currentTime(TimeUnit.MILLISECONDS) >>= (ms =>
+                        Task(new File(path.replace(
+                          s".${media.`Media Type`.ext}",
+                          s"-duplicate-$ms.${media.`Media Type`.ext}")))
+                      )
           } yield r
 
-        private def setFileTime(file: File, media: Media): RIO[Clock, Boolean] =
+        private def setFileDate(file: File, media: Media): ZIO[Clock, SetMediaDateError, Boolean] =
           Task
             .effect {
               val millis = dateFormat.parse(media.Date).getTime
               file.setLastModified(millis)
             }
-            .mapError(e => SetMediaTimeError(s"Failed setting time for '${media.Date}'", e))
+            .mapError(e => SetMediaDateError(s"Failed setting date for '${media.Date}'", e))
             .tapError(e => logger.errorIO(e.getMessage, e))
-            .retry(Schedule.fibonacci(2.seconds) && Schedule.recurs(4))
+            .retry(Schedule.fibonacci(2.seconds) && Schedule.recurs(noOfModifyDateRetries))
 
         private val retryDownloadSchedule =
-          Schedule.fibonacci(2.seconds) && Schedule.recurs(noOfRetries)
+          Schedule.fibonacci(2.seconds) && Schedule.recurs(noOfDownloadRetries)
 
         private def getMediaUrl(media: Media): RIO[Clock, String] =
           Task(uri"${media.`Download Link`}") >>= { downloadUri =>
@@ -73,7 +76,7 @@ object Downloader {
                 case Response(Right(url), StatusCode.Ok, _, _, _) =>
                   Task.succeed(url)
                 case r @ Response(_, code, _, _, _) =>
-                  val message = s"Error getting media '${media.Date}', code $code, message: ${r.body.toString}"
+                  val message = s"Error getting media url '${media.Date}', code $code, message: ${r.body.toString}"
                   logger.errorIO(message) *> ZIO.fail(DownloadError(message))
               }
               .retry(retryDownloadSchedule)
@@ -96,22 +99,27 @@ object Downloader {
           }
 
         //todo diff output with input
-        override def downloadMedia(media: Media): URIO[Clock, ResultMediaFile] =
+        override def downloadMedia(media: Media): URIO[Clock, MediaResult] =
           (
             for {
               _         <- logger.infoIO(s"Downloading: $media")
               url       <- getMediaUrl(media)
               emptyFile <- createEmptyFile(media)
               mediaFile <- downloadMediaToFile(emptyFile, media, url)
-              _         <- setFileTime(mediaFile, media)
+              _         <- setFileDate(mediaFile, media)
               _         <- clock.sleep(500.milliseconds)
-            } yield ResultMediaFileSaved
+            } yield MediaSaved
           )
-          .catchAll(t => //todo recover from set time err
-            logger
-              .errorIO(s"Failed downloading media file '${media.Date}', retried $noOfRetries times, will skip...", t)
-              .as(ResultMediaFileFailed(media))
-          )
+          .catchAll {
+            case e: DownloadError =>
+              logger
+                .errorIO(s"Failed downloading media file '${media.Date}', retried $noOfDownloadRetries times, will skip...", e)
+                .as(MediaDownloadFailed(media))
+            case e: SetMediaDateError =>
+              logger
+                .errorIO(s"Failed setting date for media file '${media.Date}', retried $noOfModifyDateRetries times, will skip...", e)
+                .as(MediaSetDateFailed(media))
+          }
 
       }
 
