@@ -16,9 +16,10 @@ import modules.FileOps._
 import zio._
 import zio.clock.Clock
 import zio.duration._
+import zio.macros.accessible
 
-object Downloader {
-  type Downloader = Has[Service]
+@accessible object Downloader {
+  type DownloaderService = Has[Service]
 
   private lazy val mediaFolder = "snapchat-memories"
   private lazy val dateFormat: SimpleDateFormat = {
@@ -31,10 +32,7 @@ object Downloader {
     def downloadMedia(media: Media): RIO[Clock, MediaResult]
   }
 
-  def downloadMedia(media: Media): RIO[Downloader with Clock, MediaResult] =
-    ZIO.accessM[Downloader with Clock](_.get.downloadMedia(media))
-
-  private [modules] val downloaderLayer: ZLayer[SttpClient with FileOps, Nothing, Downloader] =
+  private [modules] val downloaderLayer: ZLayer[SttpClient with FileOpsService, Nothing, DownloaderService] =
     ZLayer.fromServices[SttpBackend[Task, Nothing, WebSocketHandler], FileOps.Service, Downloader.Service] { (backend, fileOps) =>
       new Service with LoggingSupport {
         private implicit val sttpBacked: SttpBackend[Task, Nothing, WebSocketHandler] = backend
@@ -125,6 +123,6 @@ object Downloader {
 
     }
 
-  val liveLayer: ULayer[Downloader] = AsyncHttpClientZioBackend.layer().orDie ++ FileOps.liveLayer >>> downloaderLayer
+  val liveLayer: ULayer[DownloaderService] = AsyncHttpClientZioBackend.layer().orDie ++ FileOps.liveLayer >>> downloaderLayer
 
 }

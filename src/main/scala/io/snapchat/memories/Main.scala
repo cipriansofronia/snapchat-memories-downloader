@@ -24,7 +24,7 @@ object Main extends App with LoggingSupport {
     //todo dockerize it
     program
       .catchAll(e => logger.errorIO(s"Program error! Message: ${e.getMessage}", e).as(1))
-      .provideLayer(ZLayer.requires[Clock] ++ JsonOps.liveLayer ++ FileOps.liveLayer ++ Downloader.liveLayer)
+      .provideSomeLayer[Clock](JsonOps.liveLayer ++ FileOps.liveLayer ++ Downloader.liveLayer)
   }
 
 }

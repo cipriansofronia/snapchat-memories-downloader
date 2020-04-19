@@ -26,14 +26,14 @@ object Helper extends LoggingSupport {
       .fromOption(args.headOption)
       .orElseFail(NoMemoriesFileError("Please provide your snapchat memories json file!"))
 
-  def interpretResults(inputMemoriesCount: Int, results: List[MediaResult]): RIO[JsonOps with FileOps with Clock, Unit] =
+  def interpretResults(inputMemoriesCount: Int, results: List[MediaResult]): RIO[JsonOpsService with FileOpsService with Clock, Unit] =
     for {
       report <- extractResults(results)
       millis <- clock.currentTime(TimeUnit.MILLISECONDS)
       _      <- saveAndLogResults(inputMemoriesCount, report, millis)
     } yield ()
 
-  private def saveAndLogResults(inputMemoriesCount: Int, report: ResultReport, ms: Long): RIO[JsonOps with FileOps, Unit] =
+  private def saveAndLogResults(inputMemoriesCount: Int, report: ResultReport, ms: Long): RIO[JsonOpsService with FileOpsService, Unit] =
     if (report.savedMediasCount == inputMemoriesCount)
       logger.infoIO {
         s"""|************** Download finished! **************
@@ -75,7 +75,7 @@ object Helper extends LoggingSupport {
     } yield ResultReport(savedSize, noDates, noDownloads)
   }
 
-  private def saveFailedResult(results: List[MediaResultFailed], fileName: String): RIO[JsonOps with FileOps, Unit] =
+  private def saveFailedResult(results: List[MediaResultFailed], fileName: String): RIO[JsonOpsService with FileOpsService, Unit] =
     (for {
       json <- toJson(SnapchatMemories(results.map(_.media)))
       _    <- writeFile(fileName, json)

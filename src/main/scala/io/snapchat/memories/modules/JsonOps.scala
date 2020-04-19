@@ -8,22 +8,17 @@ import io.circe.generic.auto._
 import io.circe.generic.extras.semiauto._
 import models._
 import zio._
+import zio.macros.accessible
 
-object JsonOps {
-  type JsonOps = Has[Service]
+@accessible object JsonOps {
+  type JsonOpsService = Has[Service]
 
   trait Service {
     def parse(json: String): Task[SnapchatMemories]
     def toJson(memories: SnapchatMemories): Task[String]
   }
 
-  def parse(json: String): RIO[JsonOps, SnapchatMemories] =
-    ZIO.accessM[JsonOps](_.get.parse(json))
-
-  def toJson(memories: SnapchatMemories): RIO[JsonOps, String] =
-    ZIO.accessM[JsonOps](_.get.toJson(memories))
-
-  val liveLayer: ULayer[JsonOps] = ZLayer.succeed {
+  val liveLayer: ULayer[JsonOpsService] = ZLayer.succeed {
     new Service {
       implicit private val mediaTypeDecoder: Decoder[MediaType] = deriveEnumerationDecoder[MediaType]
       implicit private val mediaTypeEncoder: Encoder[MediaType] = deriveEnumerationEncoder[MediaType]

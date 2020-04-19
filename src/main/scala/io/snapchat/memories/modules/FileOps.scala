@@ -3,9 +3,10 @@ package modules
 
 import os._
 import zio._
+import zio.macros.accessible
 
-object FileOps {
-  type FileOps = Has[Service]
+@accessible object FileOps {
+  type FileOpsService = Has[Service]
 
   trait Service {
     def doesFilePathExist(filePath: String): Task[Boolean]
@@ -13,13 +14,7 @@ object FileOps {
     def writeFile(filePath: String, data: Source): Task[Unit]
   }
 
-  def readFile(filePath: String): RIO[FileOps, String] =
-    ZIO.accessM[FileOps](_.get.readFile(filePath))
-
-  def writeFile(filePath: String, data: Source): RIO[FileOps, Unit] =
-    ZIO.accessM[FileOps](_.get.writeFile(filePath, data))
-
-  val liveLayer: ULayer[FileOps] = ZLayer.succeed {
+  val liveLayer: ULayer[FileOpsService] = ZLayer.succeed {
     new Service {
       override def doesFilePathExist(filePath: String): Task[Boolean] =
         Task(os.exists(os.pwd / RelPath(filePath)))
