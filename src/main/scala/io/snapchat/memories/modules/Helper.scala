@@ -7,6 +7,7 @@ import com.github.mlangc.slf4zio.api._
 import models._
 import modules.JsonOps._
 import modules.FileOps._
+import os.Path
 import zio._
 import zio.clock.Clock
 
@@ -21,10 +22,11 @@ object Helper extends LoggingSupport {
     notSavedDownloads: List[MediaDownloadFailed]
   )
 
-  def getFilePath(args: List[String]): IO[NoMemoriesFileError, String] =
+  def getFilePath(args: List[String]): Task[Path] =
     ZIO
       .fromOption(args.headOption)
       .orElseFail(NoMemoriesFileError("Please provide your snapchat memories json file!"))
+      .flatMap(p => Task(Path(p))) //todo rel
 
   def interpretResults(inputMemoriesCount: Int, results: List[MediaResult]): RIO[JsonOpsService with FileOpsService with Clock, Unit] =
     for {
@@ -78,7 +80,7 @@ object Helper extends LoggingSupport {
   private def saveFailedResult(results: List[MediaResultFailed], fileName: String): RIO[JsonOpsService with FileOpsService, Unit] =
     (for {
       json <- toJson(SnapchatMemories(results.map(_.media)))
-      _    <- writeFile(fileName, json)
+      _    <- writeFile(os.pwd / os.RelPath(fileName), json)
     } yield ()).when(results.nonEmpty)
 
 

@@ -3,16 +3,13 @@ package modules
 
 import java.io.File
 import java.text.SimpleDateFormat
-import java.util.TimeZone
-import java.util.concurrent.TimeUnit
+import java.util.{TimeZone, UUID}
 
 import com.github.mlangc.slf4zio.api._
 import sttp.client._
-import sttp.client.asynchttpclient.WebSocketHandler
 import sttp.client.asynchttpclient.zio.{AsyncHttpClientZioBackend, SttpClient}
 import sttp.model.StatusCode
 import models._
-import modules.FileOps._
 import zio._
 import zio.clock.Clock
 import zio.duration._
@@ -32,23 +29,17 @@ import zio.macros.accessible
     def downloadMedia(media: Media): RIO[Clock, MediaResult]
   }
 
-  private [modules] val downloaderLayer: ZLayer[SttpClient with FileOpsService, Nothing, DownloaderService] =
-    ZLayer.fromServices[SttpBackend[Task, Nothing, WebSocketHandler], FileOps.Service, Downloader.Service] { (backend, fileOps) =>
+  private [modules] val downloaderLayer: URLayer[SttpClient, DownloaderService] =
+    ZLayer.fromService { implicit backend =>
       new Service with LoggingSupport {
-        private implicit val sttpBacked: SttpBackend[Task, Nothing, WebSocketHandler] = backend
         private val noOfDownloadRetries = 7
         private val noOfModifyDateRetries = 4
 
-        private def createEmptyFile(media: Media): RIO[Clock, File] =
+        private def createEmptyFile(media: Media): Task[File] =
           for {
-            path   <- Task.effectTotal(s"$mediaFolder/${media.fileName}.${media.`Media Type`.ext}")
-            exists <- fileOps.doesFilePathExist(path)
-            r      <- if (!exists) Task(new File(path))
-                      else clock.currentTime(TimeUnit.MILLISECONDS) >>= (ms =>
-                        Task(new File(path.replace(
-                          s".${media.`Media Type`.ext}",
-                          s"-duplicate-$ms.${media.`Media Type`.ext}")))
-                      )
+            uuid <- Task.effectTotal(UUID.randomUUID)
+            path <- Task.effectTotal(s"$mediaFolder/${media.fileName}-$uuid.${media.`Media Type`.ext}")
+            r    <- Task(new File(path))
           } yield r
 
         private def setFileDate(file: File, media: Media): ZIO[Clock, SetMediaDateError, Boolean] =
@@ -96,8 +87,7 @@ import zio.macros.accessible
               .retry(retryDownloadSchedule)
           }
 
-        //todo diff output with input
-        override def downloadMedia(media: Media): URIO[Clock, MediaResult] =
+        override def downloadMedia(media: Media): RIO[Clock, MediaResult] =
           (
             for {
               _         <- logger.infoIO(s"Downloading: $media")
@@ -108,7 +98,7 @@ import zio.macros.accessible
               _         <- clock.sleep(500.milliseconds)
             } yield MediaSaved
           )
-          .catchAll {
+          .catchSome {
             case e: DownloadError =>
               logger
                 .errorIO(s"Failed downloading media file '${media.Date}', retried $noOfDownloadRetries times, will skip...", e)
@@ -123,6 +113,7 @@ import zio.macros.accessible
 
     }
 
-  val liveLayer: ULayer[DownloaderService] = AsyncHttpClientZioBackend.layer().orDie ++ FileOps.liveLayer >>> downloaderLayer
+  val liveLayer: ULayer[DownloaderService] =
+    AsyncHttpClientZioBackend.layer().orDie >>> downloaderLayer
 
 }

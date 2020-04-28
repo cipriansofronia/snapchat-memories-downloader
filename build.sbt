@@ -5,7 +5,7 @@ name := projectName
 
 version := "0.1.3"
 
-scalaVersion := "2.12.10"
+scalaVersion := "2.12.11"
 
 scalacOptions := Seq(
   "-unchecked",

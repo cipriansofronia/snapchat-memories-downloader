@@ -9,21 +9,17 @@ import zio.macros.accessible
   type FileOpsService = Has[Service]
 
   trait Service {
-    def doesFilePathExist(filePath: String): Task[Boolean]
-    def readFile(filePath: String): Task[String]
-    def writeFile(filePath: String, data: Source): Task[Unit]
+    def readFile(filePath: Path): Task[String]
+    def writeFile(filePath: Path, data: Source): Task[Unit]
   }
 
   val liveLayer: ULayer[FileOpsService] = ZLayer.succeed {
     new Service {
-      override def doesFilePathExist(filePath: String): Task[Boolean] =
-        Task(os.exists(os.pwd / RelPath(filePath)))
+      override def readFile(filePath: Path): Task[String] =
+        Task(os.read(filePath))
 
-      override def readFile(filePath: String): Task[String] =
-        Task(os.read(Path(filePath))) //todo rel?
-
-      override def writeFile(filePath: String, data: Source): Task[Unit] =
-        Task(os.write(os.pwd / RelPath(filePath), data, createFolders = true))
+      override def writeFile(filePath: Path, data: Source): Task[Unit] =
+        Task(os.write.over(filePath, data, createFolders = true, truncate = true))
     }
   }
 }
