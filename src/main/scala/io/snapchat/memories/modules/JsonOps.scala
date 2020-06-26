@@ -6,9 +6,10 @@ import io.circe.syntax._
 import io.circe.parser._
 import io.circe.generic.auto._
 import io.circe.generic.extras.semiauto._
-import models._
 import zio._
 import zio.macros.accessible
+
+import models._
 
 @accessible object JsonOps {
   type JsonOpsService = Has[Service]

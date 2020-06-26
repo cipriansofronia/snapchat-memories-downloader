@@ -9,24 +9,25 @@ import com.github.mlangc.slf4zio.api._
 import sttp.client._
 import sttp.client.asynchttpclient.zio.{AsyncHttpClientZioBackend, SttpClient}
 import sttp.model.StatusCode
-import models._
 import zio._
 import zio.clock.Clock
 import zio.duration._
 import zio.macros.accessible
 
-@accessible object Downloader {
+import models._
+
+@accessible object DownloaderOps {
   type DownloaderService = Has[Service]
 
   private lazy val mediaFolder = "snapchat-memories"
   private lazy val dateFormat: SimpleDateFormat = {
-    val simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z")
+    val simpleDateFormat = new SimpleDateFormat(Config.MemoriesDateFormat)
     simpleDateFormat.setTimeZone(TimeZone.getDefault)
     simpleDateFormat
   }
 
   trait Service {
-    def downloadMedia(media: Media): RIO[Clock, MediaResult]
+    def download(media: Media): RIO[Clock, MediaResult]
   }
 
   private [modules] val downloaderLayer: URLayer[SttpClient, DownloaderService] =
@@ -37,8 +38,8 @@ import zio.macros.accessible
 
         private def createEmptyFile(media: Media): Task[File] =
           for {
-            uuid <- Task.effectTotal(UUID.randomUUID)
-            path <- Task.effectTotal(s"$mediaFolder/${media.fileName}-$uuid.${media.`Media Type`.ext}")
+            uuid <- UIO(UUID.randomUUID)
+            path <- UIO(s"$mediaFolder/${media.fileName}-$uuid.${media.`Media Type`.ext}")
             r    <- Task(new File(path))
           } yield r
 
@@ -65,13 +66,13 @@ import zio.macros.accessible
                 case Response(Right(url), StatusCode.Ok, _, _, _) =>
                   Task.succeed(url)
                 case r @ Response(_, code, _, _, _) =>
-                  val message = s"Error getting media url '${media.Date}', code $code, message: ${r.body.toString}"
+                  val message = s"Error getting media url for '${media.Date}', code $code, message: ${r.body.toString}"
                   logger.errorIO(message) *> ZIO.fail(DownloadError(message))
               }
               .retry(retryDownloadSchedule)
           }
 
-        private def downloadMediaToFile(newFile: File, media: Media, mediaUrl: String): RIO[Clock, File] =
+        private def downloadToFile(newFile: File, media: Media, mediaUrl: String): RIO[Clock, File] =
           Task(uri"$mediaUrl") >>= { mediaUri =>
             basicRequest
               .get(mediaUri)
@@ -87,13 +88,13 @@ import zio.macros.accessible
               .retry(retryDownloadSchedule)
           }
 
-        override def downloadMedia(media: Media): RIO[Clock, MediaResult] =
+        override def download(media: Media): RIO[Clock, MediaResult] =
           (
             for {
               _         <- logger.infoIO(s"Downloading: $media")
               url       <- getMediaUrl(media)
               emptyFile <- createEmptyFile(media)
-              mediaFile <- downloadMediaToFile(emptyFile, media, url)
+              mediaFile <- downloadToFile(emptyFile, media, url)
               _         <- setFileDate(mediaFile, media)
               _         <- clock.sleep(500.milliseconds)
             } yield MediaSaved

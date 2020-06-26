@@ -1,7 +1,7 @@
 package io.snapchat.memories
 package modules
 
-import os._
+import os.{Path, Source}
 import zio._
 import zio.macros.accessible
 
