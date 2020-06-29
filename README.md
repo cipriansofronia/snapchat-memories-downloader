@@ -40,5 +40,5 @@ Usage: snapchat-memories-downloader [options]
 #### How to build it:
 You can always build the artifact yourself using this command: 
 ```bash
-sbt assembly
+➜ sbt assembly
 ```
