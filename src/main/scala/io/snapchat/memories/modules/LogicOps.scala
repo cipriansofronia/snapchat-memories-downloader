@@ -75,7 +75,7 @@ object LogicOps extends LoggingSupport {
         case Some(beforeDate) =>
           for {
             configDate <- Task(configDateFormat.parse(beforeDate))
-            filtered   <- ZIO.filter(memories.`Saved Media`)(m => Task(memoriesDateFormat.parse(m.Date).before(configDate)))
+            filtered   <- ZIO.filterPar(memories.`Saved Media`)(m => Task(memoriesDateFormat.parse(m.Date).before(configDate)))
           } yield SnapchatMemories(filtered)
       }
     }
@@ -87,7 +87,7 @@ object LogicOps extends LoggingSupport {
         case Some(afterDate) =>
           for {
             configDate <- Task(configDateFormat.parse(afterDate))
-            filtered   <- ZIO.filter(memories.`Saved Media`)(m => Task(memoriesDateFormat.parse(m.Date).after(configDate)))
+            filtered   <- ZIO.filterPar(memories.`Saved Media`)(m => Task(memoriesDateFormat.parse(m.Date).after(configDate)))
           } yield SnapchatMemories(filtered)
       }
     }
