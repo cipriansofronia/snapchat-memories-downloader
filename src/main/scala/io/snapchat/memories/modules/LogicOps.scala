@@ -3,7 +3,6 @@ package modules
 
 import java.util.concurrent.TimeUnit
 import java.lang.{Runtime => JRuntime}
-import java.text.SimpleDateFormat
 
 import com.github.mlangc.slf4zio.api._
 import zio._
@@ -48,48 +47,42 @@ object LogicOps extends LoggingSupport {
       _            <- interpretResults(nrOfMemories, results)
     } yield ()
 
+  private case class ZFoldOption[A, B](maybeA: Option[A]) {
+    def apply(zero: UIO[B], fct: A => Task[B]): Task[B] = maybeA.fold[Task[B]](zero)(fct)
+  }
+
   private def filterByNrOfMemories(memories: SnapchatMemories) =
-    ZIO.service[Config] >>= {
-      _.memoriesFilter.numberOfMemories match {
-        case None        => UIO(memories)
-        case Some(value) =>
+    ZIO.service[Config] >>= { config =>
+      ZFoldOption(config.memoriesFilter.numberOfMemories)(
+        UIO(memories),
+        value =>
           if (value.takeLastMemories)
             UIO(SnapchatMemories(memories.`Saved Media`.takeRight(value.nrOfMemories)))
           else
             UIO(SnapchatMemories(memories.`Saved Media`.take(value.nrOfMemories)))
-      }
+      )
     }
 
   private def filterByDateMemories(memories: SnapchatMemories) =
     for {
-      memoriesDateFormat <- Task(new SimpleDateFormat(Config.MemoriesDateFormat))
-      configDateFormat   <- Task(new SimpleDateFormat(Config.ConfigDateFormat))
-      tmp1               <- beforeDateFilter(memories, configDateFormat, memoriesDateFormat)
-      tmp2               <- afterDateFilter(tmp1, configDateFormat, memoriesDateFormat)
+      tmp1 <- beforeDateFilter(memories)
+      tmp2 <- afterDateFilter(tmp1)
     } yield tmp2
 
-  private def beforeDateFilter(memories: SnapchatMemories, configDateFormat: SimpleDateFormat, memoriesDateFormat: SimpleDateFormat) =
-    ZIO.service[Config] >>= {
-      _.memoriesFilter.memoriesBeforeDate match {
-        case None             => UIO(memories)
-        case Some(beforeDate) =>
-          for {
-            configDate <- Task(configDateFormat.parse(beforeDate))
-            filtered   <- ZIO.filterPar(memories.`Saved Media`)(m => Task(memoriesDateFormat.parse(m.Date).before(configDate)))
-          } yield SnapchatMemories(filtered)
-      }
+  private def beforeDateFilter(memories: SnapchatMemories) =
+    ZIO.service[Config] >>= { config =>
+      ZFoldOption(config.memoriesFilter.memoriesBeforeDate)(
+        UIO(memories),
+        beforeDate => ZIO.filterPar(memories.`Saved Media`)(m => Task(m.Date.isBefore(beforeDate))).map(SnapchatMemories)
+      )
     }
 
-  private def afterDateFilter(memories: SnapchatMemories, configDateFormat: SimpleDateFormat, memoriesDateFormat: SimpleDateFormat) =
-    ZIO.service[Config] >>= {
-      _.memoriesFilter.memoriesAfterDate match {
-        case None            => UIO(memories)
-        case Some(afterDate) =>
-          for {
-            configDate <- Task(configDateFormat.parse(afterDate))
-            filtered   <- ZIO.filterPar(memories.`Saved Media`)(m => Task(memoriesDateFormat.parse(m.Date).after(configDate)))
-          } yield SnapchatMemories(filtered)
-      }
+  private def afterDateFilter(memories: SnapchatMemories) =
+    ZIO.service[Config] >>= { config =>
+      ZFoldOption(config.memoriesFilter.memoriesAfterDate)(
+        UIO(memories),
+        afterDate => ZIO.filterPar(memories.`Saved Media`)(m => Task(m.Date.isAfter(afterDate))).map(SnapchatMemories)
+      )
     }
 
   private def interpretResults(inputMemoriesCount: Int, results: List[MediaResult]) =

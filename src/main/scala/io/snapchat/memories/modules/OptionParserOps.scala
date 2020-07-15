@@ -3,7 +3,8 @@ package modules
 
 import com.github.mlangc.slf4zio.api._
 import com.softwaremill.quicklens._
-import scopt.{DefaultOParserSetup, OParser}
+import org.joda.time.DateTime
+import scopt.{DefaultOParserSetup, OParser, Read}
 import zio.{Has, Task, ULayer, ZIO, ZLayer}
 import zio.macros.accessible
 
@@ -19,6 +20,7 @@ import models._
   val liveLayer: ULayer[OptionParserService] = ZLayer.succeed {
     new Service {
       private lazy val parser = {
+        implicit val dateTimeRead: Read[DateTime] = Read.stringRead.map(Config.dateTimeParser.parse)
         val builder = OParser.builder[Config]
         import builder._
         OParser.sequence(
@@ -61,17 +63,17 @@ import models._
               if (x > 0) success
               else failure("Value <first-nr-of-memories> must be >0")),
 
-          opt[String]("memories-after-date")
+          opt[DateTime]("memories-after-date")
             .optional()
             .abbr("ad")
             .action((x, c) => c.modify(_.memoriesFilter.memoriesAfterDate).setTo(Some(x)))
-            .text(s"memories filtered after a certain date, format ${Config.ConfigDateFormat} - optional"),
+            .text(s"memories filtered after a certain date, format ${Config.dateTimeParser.pattern} - optional"),
 
-          opt[String]("memories-before-date")
+          opt[DateTime]("memories-before-date")
             .optional()
             .abbr("bd")
             .action((x, c) => c.modify(_.memoriesFilter.memoriesBeforeDate).setTo(Some(x)))
-            .text(s"memories filtered before a certain date, format ${Config.ConfigDateFormat} - optional")
+            .text(s"memories filtered before a certain date, format ${Config.dateTimeParser.pattern} - optional")
         )
       }
 
@@ -82,7 +84,7 @@ import models._
       def parse(args: List[String]): Task[Config] =
         for {
           tmp <- Task(OParser.parse(parser, args, Config(), setup))
-          res <- ZIO.fromOption(tmp).orElseFail(ConfigError("Configuration error! Try --help for information!"))
+          res <- ZIO.fromOption(tmp).orElseFail(ConfigError("Configuration error! Try --help for more information!"))
         } yield res
     }
   }

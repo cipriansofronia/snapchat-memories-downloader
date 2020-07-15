@@ -28,8 +28,8 @@ object JsonOpsSpec extends DefaultRunnableSpec {
       |""".stripMargin
 
   private val actualMemories = SnapchatMemories(List(
-    Media("2020-02-14 07:34:00 UTC", PHOTO, "https://some-site/test.jpg"),
-    Media("2020-02-14 07:29:57 UTC", VIDEO, "https://some-site/test.mp4")
+    Media(Media.dateTimeParser.parse("2020-02-14 07:34:00 UTC"), PHOTO, "https://some-site/test.jpg"),
+    Media(Media.dateTimeParser.parse("2020-02-14 07:29:57 UTC"), VIDEO, "https://some-site/test.mp4")
   ))
 
   override def spec: ZSpec[TestEnvironment, Any] =

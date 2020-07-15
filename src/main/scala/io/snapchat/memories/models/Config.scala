@@ -1,6 +1,8 @@
 package io.snapchat.memories
 package models
 
+import org.joda.time.DateTime
+
 case class NumberOfMemories(
   nrOfMemories: Int = 1000,
   takeLastMemories: Boolean = true
@@ -8,8 +10,8 @@ case class NumberOfMemories(
 
 case class MemoriesFilter(
   numberOfMemories: Option[NumberOfMemories] = None,
-  memoriesAfterDate: Option[String] = None,
-  memoriesBeforeDate: Option[String] = None
+  memoriesAfterDate: Option[DateTime] = None,
+  memoriesBeforeDate: Option[DateTime] = None
 )
 
 case class Config(
@@ -19,6 +21,6 @@ case class Config(
 )
 
 object Config {
-  val MemoriesDateFormat = "yyyy-MM-dd HH:mm:ss Z"
-  val ConfigDateFormat = "yyyy-MM-dd"
+  private val ConfigDatePattern = "yyyy-MM-dd"
+  val dateTimeParser: DateTimeParser = DateTimeParser(ConfigDatePattern)
 }

@@ -8,7 +8,7 @@ lazy val CirceVersion = "0.13.0"
 
 lazy val root = Project(projectName, file("."))
   .enablePlugins(BuildInfoPlugin)
-  .settings(version := "0.2.0")
+  .settings(version := "0.2.1")
   .settings(scalaVersion := "2.12.11")
   .settings(scalacOptions := Seq(
     "-unchecked",
@@ -44,6 +44,7 @@ lazy val root = Project(projectName, file("."))
       "io.circe"                        %% "circe-parser"                       % CirceVersion,
       "com.github.scopt"                %% "scopt"                              % "4.0.0-RC2",
       "com.lihaoyi"                     %% "os-lib"                             % "0.6.3",
+      "joda-time"                       %  "joda-time"                          % "2.10.6",
       "com.github.mlangc"               %% "slf4zio"                            % "1.0.0-RC21",
       "net.logstash.logback"            %  "logstash-logback-encoder"           % "6.3",
       "ch.qos.logback"                  %  "logback-classic"                    % "1.2.3",
@@ -61,3 +62,4 @@ lazy val root = Project(projectName, file("."))
     case PathList("META-INF", _ @ _*) => MergeStrategy.discard
     case _ => MergeStrategy.last
   })
+  //.settings(test in assembly := {})
