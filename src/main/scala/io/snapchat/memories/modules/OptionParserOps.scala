@@ -20,7 +20,8 @@ import models._
   val liveLayer: ULayer[OptionParserService] = ZLayer.succeed {
     new Service {
       private lazy val parser = {
-        implicit val dateTimeRead: Read[DateTime] = Read.stringRead.map(Config.dateTimeParser.parse)
+        import DateParser.ConfigDateParser
+        implicit val dateTimeRead: Read[DateTime] = Read.stringRead.map(ConfigDateParser.parse)
         val builder = OParser.builder[Config]
         import builder._
         OParser.sequence(
@@ -67,13 +68,13 @@ import models._
             .optional()
             .abbr("ad")
             .action((x, c) => c.modify(_.memoriesFilter.memoriesAfterDate).setTo(Some(x)))
-            .text(s"memories filtered after a certain date, format ${Config.dateTimeParser.pattern} - optional"),
+            .text(s"memories filtered after a certain date, format ${ConfigDateParser.pattern} - optional"),
 
           opt[DateTime]("memories-before-date")
             .optional()
             .abbr("bd")
             .action((x, c) => c.modify(_.memoriesFilter.memoriesBeforeDate).setTo(Some(x)))
-            .text(s"memories filtered before a certain date, format ${Config.dateTimeParser.pattern} - optional")
+            .text(s"memories filtered before a certain date, format ${ConfigDateParser.pattern} - optional")
         )
       }
 

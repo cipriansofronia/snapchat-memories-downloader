@@ -24,13 +24,15 @@ import models._
 
   val liveLayer: ULayer[JsonOpsService] = ZLayer.succeed {
     new Service {
+      import DateParser.MediaDateParser
+
       implicit private val mediaTypeDecoder: Decoder[MediaType] = deriveEnumerationDecoder[MediaType]
       implicit private val mediaTypeEncoder: Encoder[MediaType] = deriveEnumerationEncoder[MediaType]
 
       implicit private val dateTimeDecoder: Decoder[DateTime] =
-        Decoder.decodeString.emapTry(v => Try(Media.dateTimeParser.parse(v)))
+        Decoder.decodeString.emapTry(v => Try(MediaDateParser.parse(v)))
       implicit private val dateTimeEncoder: Encoder[DateTime] =
-        Encoder.encodeString.contramap(_.toString(Media.dateTimeParser.dateTimeFormatter))
+        Encoder.encodeString.contramap(_.toString(MediaDateParser.dateTimeFormatterUTC))
 
       override def parse(raw: String): Task[SnapchatMemories] =
         Task(decode[SnapchatMemories](raw)) >>= {

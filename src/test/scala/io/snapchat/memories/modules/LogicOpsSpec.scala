@@ -13,6 +13,8 @@ import models._
 
 object LogicOpsSpec extends DefaultRunnableSpec {
 
+  import DateParser._
+
   private val testMemories =
     """
       |{
@@ -38,9 +40,9 @@ object LogicOpsSpec extends DefaultRunnableSpec {
 
   private val actualMemories =
     SnapchatMemories(List(
-      Media(Media.dateTimeParser.parse("2020-02-14 07:34:00 UTC"), PHOTO, "https://some-site/test.jpg")
-      , Media(Media.dateTimeParser.parse("2020-03-14 07:34:00 UTC"), PHOTO, "https://some-site/test.jpg")
-      , Media(Media.dateTimeParser.parse("2020-04-14 07:34:00 UTC"), PHOTO, "https://some-site/test.jpg")
+      Media(MediaDateParser.parse("2020-02-14 07:34:00 UTC"), PHOTO, "https://some-site/test.jpg")
+      , Media(MediaDateParser.parse("2020-03-14 07:34:00 UTC"), PHOTO, "https://some-site/test.jpg")
+      , Media(MediaDateParser.parse("2020-04-14 07:34:00 UTC"), PHOTO, "https://some-site/test.jpg")
     ))
 
   private val createTmpFileLayer: ULayer[Has[Path]] =
@@ -80,13 +82,13 @@ object LogicOpsSpec extends DefaultRunnableSpec {
         for {
           r <- loadAndFilter
         } yield assert(r)(equalTo(SnapchatMemories(actualMemories.`Saved Media`.take(1))))
-      }.updateService[Config](_.modify(_.memoriesFilter.memoriesBeforeDate).setTo(Some(Config.dateTimeParser.parse("2020-03-14"))))
+      }.updateService[Config](_.modify(_.memoriesFilter.memoriesBeforeDate).setTo(Some(ConfigDateParser.parse("2020-03-14"))))
 
       , testM("test filtering by after date") {
         for {
           r <- loadAndFilter
         } yield assert(r)(equalTo(SnapchatMemories(actualMemories.`Saved Media`.tail)))
-      }.updateService[Config](_.modify(_.memoriesFilter.memoriesAfterDate).setTo(Some(Config.dateTimeParser.parse("2020-03-14"))))
+      }.updateService[Config](_.modify(_.memoriesFilter.memoriesAfterDate).setTo(Some(ConfigDateParser.parse("2020-03-14"))))
 
     ).provideLayerShared(
       (createTmpFileLayer >>> testConfigLayer) ++

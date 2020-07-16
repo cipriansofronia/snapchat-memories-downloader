@@ -18,8 +18,6 @@ import models._
 @accessible object DownloaderOps {
   type DownloaderService = Has[Service]
 
-  private val MediaFolder = "snapchat-memories"
-
   trait Service {
     def download(media: Media): RIO[Clock, MediaResult]
   }
@@ -44,7 +42,7 @@ import models._
         private def emptyFile(media: Media): Task[File] =
           for {
             uuid <- UIO(UUID.randomUUID)
-            path <- UIO(s"$MediaFolder/${media.fileName}-$uuid.${media.`Media Type`.ext}")
+            path <- UIO(s"${Config.MemoriesFolder}/${media.fileName}-$uuid.${media.`Media Type`.ext}")
             r    <- Task(new File(path))
           } yield r
 
@@ -87,8 +85,8 @@ import models._
               .retry(retryDownloadSchedule)
           }
 
-        override def download(media: Media): RIO[Clock, MediaResult] =
-          (
+        override def download(media: Media): RIO[Clock, MediaResult] = {
+          val inner =
             for {
               _         <- logger.infoIO(s"Downloading: $media")
               url       <- getMediaUrl(media)
@@ -96,8 +94,8 @@ import models._
               mediaFile <- downloadToFile(emptyFile, media, url)
               _         <- setFileDate(mediaFile, media)
             } yield MediaSaved
-          )
-          .catchSome {
+
+          inner.catchSome {
             case e: DownloadError =>
               logger
                 .errorIO(s"Failed downloading media file '${media.fileName}', retried $NrOfDownloadRetries times, will skip...", e)
@@ -107,6 +105,7 @@ import models._
                 .errorIO(s"Failed setting date for media file '${media.fileName}', retried $NrOfModifyDateRetries times, will skip...", e)
                 .as(MediaSetDateFailed(media))
           }
+        }
       }
     }
 

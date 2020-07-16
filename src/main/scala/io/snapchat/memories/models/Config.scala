@@ -21,6 +21,7 @@ case class Config(
 )
 
 object Config {
-  private val ConfigDatePattern = "yyyy-MM-dd"
-  val dateTimeParser: DateTimeParser = DateTimeParser(ConfigDatePattern)
+  val MemoriesFolder      = "snapchat-memories"
+  val ConfigDatePattern   = "yyyy-MM-dd"
+  val MemoriesDatePattern = "yyyy-MM-dd' 'HH:mm:ss' 'z"
 }

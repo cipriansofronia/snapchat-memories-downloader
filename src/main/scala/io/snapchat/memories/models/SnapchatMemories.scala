@@ -14,13 +14,10 @@ case object VIDEO extends MediaType {
 }
 
 case class Media(Date: DateTime, `Media Type`: MediaType, `Download Link`: String) {
-  private val fileNameFormatter = Media.dateTimeParser.dateTimeFormatter.withZoneUTC()
-  val fileName: String = Date.toString(fileNameFormatter).replaceAll(" ", "-")
-}
-
-object Media {
-  private val MemoriesDatePattern = "yyyy-MM-dd' 'HH:mm:ss' 'z"
-  val dateTimeParser: DateTimeParser = DateTimeParser(MemoriesDatePattern)
+  val fileName: String =
+    Date
+      .toString(DateParser.MediaDateParser.dateTimeFormatterUTC)
+      .replaceAll(" ", "-")
 }
 
 case class SnapchatMemories(`Saved Media`: List[Media])

@@ -43,16 +43,20 @@ object LogicOps extends LoggingSupport {
       nrOfMemories =  memories.`Saved Media`.size
       _            <- logger.infoIO(s"Got $nrOfMemories records from json file!")
       opsNr        <- ZIO.fromOption(config.nrOfOperations).orElse(UIO(JRuntime.getRuntime.availableProcessors()))
+      _            <- Task(os.makeDir.all(os.pwd / os.RelPath(Config.MemoriesFolder)))
       results      <- ZIO.foreachParN(opsNr)(memories.`Saved Media`)(DownloaderOps.download)
       _            <- interpretResults(nrOfMemories, results)
     } yield ()
 
   private case class ZFoldOption[A, B](maybeA: Option[A]) {
-    def apply(zero: UIO[B], fct: A => Task[B]): Task[B] = maybeA.fold[Task[B]](zero)(fct)
+    def apply(zero: UIO[B], lambda: A => Task[B]): Task[B] = maybeA.fold[Task[B]](zero)(lambda)
   }
 
+  private def withConfig[A](lambda: Config => Task[A]) =
+    ZIO.service[Config] >>= lambda
+
   private def filterByNrOfMemories(memories: SnapchatMemories) =
-    ZIO.service[Config] >>= { config =>
+    withConfig { config =>
       ZFoldOption(config.memoriesFilter.numberOfMemories)(
         UIO(memories),
         value =>
@@ -64,13 +68,10 @@ object LogicOps extends LoggingSupport {
     }
 
   private def filterByDateMemories(memories: SnapchatMemories) =
-    for {
-      tmp1 <- beforeDateFilter(memories)
-      tmp2 <- afterDateFilter(tmp1)
-    } yield tmp2
+    beforeDateFilter(memories) >>= afterDateFilter
 
   private def beforeDateFilter(memories: SnapchatMemories) =
-    ZIO.service[Config] >>= { config =>
+    withConfig { config =>
       ZFoldOption(config.memoriesFilter.memoriesBeforeDate)(
         UIO(memories),
         beforeDate => ZIO.filterPar(memories.`Saved Media`)(m => Task(m.Date.isBefore(beforeDate))).map(SnapchatMemories)
@@ -78,7 +79,7 @@ object LogicOps extends LoggingSupport {
     }
 
   private def afterDateFilter(memories: SnapchatMemories) =
-    ZIO.service[Config] >>= { config =>
+    withConfig { config =>
       ZFoldOption(config.memoriesFilter.memoriesAfterDate)(
         UIO(memories),
         afterDate => ZIO.filterPar(memories.`Saved Media`)(m => Task(m.Date.isAfter(afterDate))).map(SnapchatMemories)
@@ -135,15 +136,17 @@ object LogicOps extends LoggingSupport {
     } yield ResultReport(savedSize, noDates, noDownloads)
   }
 
-  private def saveFailedResult(results: List[MediaResultFailed], fileName: String) =
-    (
+  private def saveFailedResult(results: List[MediaResultFailed], fileName: String) = {
+    val inner =
       for {
         json <- JsonOps.toJson(SnapchatMemories(results.map(_.media)))
         _    <- FileOps.writeFile(os.pwd / os.RelPath(fileName), json)
       } yield ()
-    )
+
+    inner
       .catchAll(e => logger.errorIO(e.getMessage, e))
       .when(results.nonEmpty)
+  }
 
 
 }
