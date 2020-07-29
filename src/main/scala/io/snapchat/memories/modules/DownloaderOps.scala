@@ -28,32 +28,44 @@ import models._
         private val NrOfDownloadRetries = 7
         private val NrOfModifyDateRetries = 4
 
-        private implicit class ShowEither[L, R](either: Either[L, R]) {
-          def show: String = either match {
-            case Left(value) => checkValue(value, "Error: ")
-            case Right(value) => checkValue(value)
-          }
-          private def checkValue[A](value: A, prefix: String = ""): String = {
+        private implicit class ZIOResponseOps[E <: Throwable, EL, ER](zio: IO[E, Response[Either[EL, ER]]]) {
+
+          private def checkValue[A](value: A, prefix: String = "") = {
             val tmp = value.toString
             if (tmp.isEmpty) "empty" else s"$prefix$tmp"
           }
+
+          private def show(either: Either[EL, ER]) = either match {
+            case Left(value) => checkValue(value, "Error: ")
+            case Right(value) => checkValue(value)
+          }
+
+          def ingestResponse(media: Media): RIO[Clock, ER] = zio
+            .flatMap {
+              case Response(Right(url), StatusCode.Ok, _, _, _) => UIO(url)
+              case Response(body, code, _, _, _) =>
+                ZIO.fail(DownloadError(s"Download error for '${media.fileName}', code $code, message: ${show(body)}"))
+            }
+            .tapError(e => logger.errorIO(e.getMessage, e))
+            .retry(fibonacciRetry(NrOfDownloadRetries))
+
         }
+
+        private def fibonacciRetry(nrOfRetries: Int, one: Int = 2) =
+          Schedule.fibonacci(one.seconds) && Schedule.recurs(nrOfRetries)
 
         private def emptyFile(media: Media): Task[File] =
           for {
             uuid <- UIO(UUID.randomUUID)
             path <- UIO(s"${Config.MemoriesFolder}/${media.fileName}-$uuid.${media.`Media Type`.ext}")
-            r    <- Task(new File(path))
-          } yield r
+            file <- Task(new File(path))
+          } yield file
 
-        private def setFileDate(file: File, media: Media): ZIO[Clock, SetMediaDateError, Boolean] =
+        private def setFileDate(file: File, media: Media) =
           Task(file.setLastModified(media.Date.getMillis))
             .mapError(e => SetMediaDateError(s"Failed setting date for '${media.fileName}'", e))
             .tapError(e => logger.errorIO(e.getMessage, e))
-            .retry(Schedule.fibonacci(2.seconds) && Schedule.recurs(NrOfModifyDateRetries))
-
-        private val retryDownloadSchedule =
-          Schedule.fibonacci(2.seconds) && Schedule.recurs(NrOfDownloadRetries)
+            .retry(fibonacciRetry(NrOfModifyDateRetries))
 
         private def getMediaUrl(media: Media): RIO[Clock, String] =
           Task(uri"${media.`Download Link`}") >>= { downloadUri =>
@@ -61,13 +73,7 @@ import models._
               .post(downloadUri)
               .header("Content-Type", "application/x-www-form-urlencoded")
               .send()
-              .flatMap {
-                case Response(Right(url), StatusCode.Ok, _, _, _) => UIO(url)
-                case r @ Response(_, code, _, _, _) =>
-                  ZIO.fail(DownloadError(s"Error getting media url for '${media.fileName}', code $code, message: ${r.body.show}"))
-              }
-              .tapError(e => logger.errorIO(e.getMessage, e))
-              .retry(retryDownloadSchedule)
+              .ingestResponse(media)
           }
 
         private def downloadToFile(file: File, media: Media, mediaUrl: String): RIO[Clock, File] =
@@ -76,13 +82,7 @@ import models._
               .get(mediaUri)
               .response(asFile(file))
               .send()
-              .flatMap {
-                case Response(Right(outputFile), StatusCode.Ok, _, _, _) => UIO(outputFile)
-                case r @ Response(_, code, _, _, _) =>
-                  ZIO.fail(DownloadError(s"Error downloading file '${media.fileName}', code $code, message: ${r.body.show}"))
-              }
-              .tapError(e => logger.errorIO(e.getMessage, e))
-              .retry(retryDownloadSchedule)
+              .ingestResponse(media)
           }
 
         override def download(media: Media): RIO[Clock, MediaResult] = {

@@ -127,26 +127,17 @@ object LogicOps extends LoggingSupport {
           |was exported containing this data which can be used later to retry the download.""".stripMargin
     else ""
 
-  private def extractResults(results: List[MediaResult]): Task[ResultReport] = {
-    val savedZ       = UIO(results collect { case r @ MediaSaved => r }).map(_.size)
-    val noDatesZ     = UIO(results collect { case r: MediaSetDateFailed => r })
-    val noDownloadsZ = UIO(results collect { case r: MediaDownloadFailed => r })
-    for {
-      ((savedSize, noDates), noDownloads) <- savedZ <&> noDatesZ <&> noDownloadsZ
-    } yield ResultReport(savedSize, noDates, noDownloads)
-  }
+  private def extractResults(results: List[MediaResult]) =
+    (UIO(results collect { case r @ MediaSaved => r }).map(_.size) <&>
+      UIO(results collect { case r: MediaSetDateFailed => r }) <&>
+      UIO(results collect { case r: MediaDownloadFailed => r })) map {
+      case ((savedSize, noDates), noDownloads) => ResultReport(savedSize, noDates, noDownloads)
+    }
 
-  private def saveFailedResult(results: List[MediaResultFailed], fileName: String) = {
-    val inner =
-      for {
-        json <- JsonOps.toJson(SnapchatMemories(results.map(_.media)))
-        _    <- FileOps.writeFile(os.pwd / os.RelPath(fileName), json)
-      } yield ()
-
-    inner
+  private def saveFailedResult(results: List[MediaResultFailed], fileName: String) =
+    JsonOps.toJson(SnapchatMemories(results.map(_.media)))
+      .flatMap(FileOps.writeFile(os.pwd / os.RelPath(fileName), _))
       .catchAll(e => logger.errorIO(e.getMessage, e))
       .when(results.nonEmpty)
-  }
-
 
 }

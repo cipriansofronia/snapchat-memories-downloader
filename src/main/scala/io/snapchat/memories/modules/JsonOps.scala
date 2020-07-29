@@ -18,7 +18,7 @@ import models._
   type JsonOpsService = Has[Service]
 
   trait Service {
-    def parse(raw: String): Task[SnapchatMemories]
+    def parse(raw: String): IO[JsonError, SnapchatMemories]
     def toJson(memories: SnapchatMemories): Task[String]
   }
 
@@ -34,11 +34,9 @@ import models._
       implicit private val dateTimeEncoder: Encoder[DateTime] =
         Encoder.encodeString.contramap(_.toString(MediaDateParser.dateTimeFormatterUTC))
 
-      override def parse(raw: String): Task[SnapchatMemories] =
-        Task(decode[SnapchatMemories](raw)) >>= {
-          case Right(v) => ZIO.succeed(v)
-          case Left(e)  => ZIO.fail(JsonError(s"Couldn't deserialize json: ${e.getMessage}", e))
-        }
+      override def parse(raw: String): IO[JsonError, SnapchatMemories] =
+        ZIO.fromEither(decode[SnapchatMemories](raw))
+          .mapError(e => JsonError(s"Couldn't deserialize json: ${e.getMessage}", e))
 
       override def toJson(memories: SnapchatMemories): Task[String] =
         Task(memories.asJson.noSpaces)
