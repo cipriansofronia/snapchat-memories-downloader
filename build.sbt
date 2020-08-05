@@ -2,8 +2,8 @@ import sbt.Artifact
 
 val projectName = "snapchat-memories-downloader"
 
-lazy val ZIOVersion   = "1.0.0-RC21-2"
-lazy val SttpVersion  = "2.2.1"
+lazy val ZIOVersion   = "1.0.0"
+lazy val SttpVersion  = "2.2.3"
 lazy val CirceVersion = "0.13.0"
 
 lazy val root = Project(projectName, file("."))
@@ -43,9 +43,9 @@ lazy val root = Project(projectName, file("."))
       "io.circe"                        %% "circe-generic-extras"               % CirceVersion,
       "io.circe"                        %% "circe-parser"                       % CirceVersion,
       "com.github.scopt"                %% "scopt"                              % "4.0.0-RC2",
-      "com.lihaoyi"                     %% "os-lib"                             % "0.6.3",
+      "com.lihaoyi"                     %% "os-lib"                             % "0.7.0",
       "joda-time"                       %  "joda-time"                          % "2.10.6",
-      "com.github.mlangc"               %% "slf4zio"                            % "1.0.0-RC21",
+      "com.github.mlangc"               %% "slf4zio"                            % "1.0.0-RC21-2",
       "net.logstash.logback"            %  "logstash-logback-encoder"           % "6.3",
       "ch.qos.logback"                  %  "logback-classic"                    % "1.2.3",
       "dev.zio"                         %% "zio-test"                           % ZIOVersion % Test,
